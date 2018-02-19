@@ -1,0 +1,69 @@
+/**
+ * jsdoc.gradle
+ *
+ * Generate JSDoc from given source
+ *
+ */
+
+buildscript {
+    apply from: "${buildscript.sourceFile.parent}/repositories.gradle", to: buildscript
+    dependencies { classpath 'com.eriwen:gradle-js-plugin:2.12.0' }
+}
+
+apply plugin: com.eriwen.gradle.js.JsPlugin
+
+task jsDocs( type: com.eriwen.gradle.js.tasks.JsDocTask ) {}
+ 
+// create jsdoc documentation from the files.
+task jsDocumentation {
+
+    ext.sourceSet = null
+    ext.rootPath = "src"
+    ext.included = "*.js"
+    ext.excluded = ""
+    ext.target = "${buildDir}/jsdoc"
+    ext.debug = false
+    ext.options = []
+    ext.modulePaths = []
+
+    finalizedBy jsDocs
+    jsDocs.dependsOn it
+
+    doFirst {
+        jsDocs {
+            source = sourceSet ?: fileTree( jsDocumentation.rootPath ) {
+                    include jsDocumentation.included
+                    exclude jsDocumentation.excluded
+                }.files
+
+            destinationDir = jsDocumentation.target
+            debug = jsDocumentation.debug
+            modulePaths.addAll( jsDocumentation.modulePaths )
+        }
+
+        jsDocZip.from jsDocumentation.target
+        project.jsdoc.options = jsDocumentation.options
+    }
+}
+
+task jsDocZip(type: Zip) {
+
+    jsDocs.finalizedBy it
+    includeEmptyDirs false
+    classifier = 'jsdoc'
+
+    doLast {
+        artifacts {
+            archives file: file( "${jsDocZip.archivePath}"), name: "${archivesBaseName}", classifier: "jsdoc", type: 'zip'
+        }
+    }
+}
+
+// Debug the jsdoc generation 
+task jsDocumentationDebug() {
+    doLast {
+        jsDocumentation.debug = true
+    }
+
+    finalizedBy jsDocumentation
+}

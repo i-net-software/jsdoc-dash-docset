@@ -1,0 +1,70 @@
+
+buildscript {
+    apply from: "${buildscript.sourceFile.parent}/repositories.gradle", to: buildscript
+    dependencies {
+        classpath "com.megatome.javadoc2dash:javadoc2dash-plugin:1.2.0"
+    }
+}
+
+apply from: "${buildscript.sourceFile.parent}/jsdoc.gradle"
+apply from: "${buildscript.sourceFile.parent}/dash-docset.gradle"
+
+group = 'sample'
+version = '1.0'
+
+jsDocumentation {
+
+    rootPath = "${buildscript.sourceFile.parent}/sample/"
+    included = "*.js"
+    excluded = ""
+    options = [
+        "-t", "${buildscript.sourceFile.parent}/template",
+        "-R", "${buildscript.sourceFile.parent}/README.md",
+        "--debug",
+    ]
+    modulePaths = [
+        "${buildscript.sourceFile.parent}/template"
+    ]
+
+    finalizedBy 'javadoc2dashPrepare'
+}
+
+apply plugin: com.megatome.javadoc2dash.Javadoc2DashPlugin
+
+/**
+ * Create a DashDocset from our JavaDoc
+ */
+task javadoc2dashPrepare {
+
+    project.getTasksByName('javadoc2dash', false).each {
+        it.dependsOn 'javadoc2dashPrepare'
+        it.finalizedBy 'javadoc2dashfeed'
+    }
+
+    ext.docsetKeyword = project.group
+    ext.feedLocationsArray = [ "http://localhost" ]
+
+    finalizedBy 'javadoc2dash'
+
+    doFirst {
+        javadoc2dash {
+            displayName = archivesBaseName
+            docsetName = project.group + "-docset-" + project.version
+            keyword = docsetKeyword
+            //  iconFile = file( "icon.icns" )
+            javadocRoot = file( jsDocumentation.target )
+            javadocTask = 'jsDocs'
+            implementation = jsDocFactory()
+        }
+        javadoc2dashfeed {
+            feedName = project.group + "-docset-" + project.version
+            feedVersion = project.version
+            feedLocations = feedLocationsArray
+        }
+        javadoc2dashtar {
+            baseName = project.group + "-docset-" + project.version
+        }
+    }
+}
+
+defaultTasks 'jsDocumentation'

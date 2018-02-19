@@ -1,0 +1,117 @@
+/**
+ * dash-docset.gradle
+ *
+ * Generates a dash-docset (https://kapeli.com/docsets) using the javadoc2DashPlugin for gradle
+ * See README.md for example usage.
+ *
+ * Prequisites: A generated jsdoc (jsdoc.gradle)
+ *
+ */
+
+buildscript {
+    apply from: "${buildscript.sourceFile.parent}/repositories.gradle", to: buildscript
+    dependencies {
+        classpath "com.megatome.javadoc2dash:javadoc2dash-plugin:+"
+    }
+}
+
+apply plugin: com.megatome.javadoc2dash.Javadoc2DashPlugin
+
+import com.megatome.j2d.support.MatchTypeInterface;
+import com.megatome.j2d.support.DocSetParserInterface;
+import com.megatome.j2d.exception.BuilderException;
+import com.megatome.j2d.util.IndexData;
+import com.megatome.j2d.util.SearchIndexValue;
+
+import static com.megatome.j2d.util.LogUtility.logVerbose;
+import static org.apache.commons.lang3.StringUtils.containsIgnoreCase;
+
+public enum JSDocMatchType implements MatchTypeInterface {
+    FUNCTION("Function"),
+    NAMESPACE("Namespace"),
+    PROPERTY("Property"),
+    CLASS("Class"),
+    VALUE("Value");
+
+    private String typeName;
+
+    JSDocMatchType(String typeName) {
+        this.typeName = typeName;
+    }
+
+    @Override
+    public String getTypeName() {
+        return typeName;
+    }
+
+
+    public static JSDocMatchType type(String module) {
+        switch(module) {
+            case 'functions': return FUNCTION;
+            case 'namespaces': return NAMESPACE
+            case 'properties': return PROPERTY
+            case 'classes': return CLASS
+        }
+        return VALUE
+    }
+}
+
+public class JSDocSupport implements DocSetParserInterface {
+
+    public IndexData findIndexFile(File javadocDir) throws BuilderException {
+        final IndexData indexData = new IndexData();
+
+        if (!javadocDir.exists() || !javadocDir.isDirectory()) {
+            throw new BuilderException(String.format("%s does not exist, or is not a directory", javadocDir.getAbsolutePath()));
+        }
+
+        logVerbose("Looking for index.json file");
+
+        File indexJson = new File(javadocDir, "index.json")
+        if ( indexJson.exists() ) {
+            indexData.addFileToIndex( new File(javadocDir, "index.json"));
+        }
+
+        if ( new File(javadocDir, 'index.html').exists() ) {
+            indexData.setDocsetIndexFile( 'index.html' )
+        }
+
+        if (!indexData.hasFilesToIndex()) {
+            throw new BuilderException(String.format("Did not find any jsdoc files. Make sure that %s is a directory containing jsodc", javadocDir.getAbsolutePath()));
+        }
+
+        logVerbose("Found jsdoc files");
+
+        return indexData
+    }
+
+    public List<SearchIndexValue> findSearchIndexValues(List<File> filesToIndex) throws BuilderException {
+        final List<SearchIndexValue> values = new ArrayList<>();
+        for (final File f : filesToIndex) {
+            final List<SearchIndexValue> indexValues = indexFile(f);
+            values.addAll(indexValues);
+        }
+        return values;
+    }
+
+    private static List<SearchIndexValue> indexFile(File f) throws BuilderException {
+        final List<SearchIndexValue> values = new ArrayList<>();
+        def jsonObject = new groovy.json.JsonSlurper().parseText(f.text)
+        jsonObject.each { module, properties ->
+            MatchTypeInterface matchType = JSDocMatchType.type(module)
+            properties.each { property ->
+                values.add(new SearchIndexValue(property.name, matchType, link(property.link)));
+            }
+        }
+
+        return values;
+    }
+
+    private static String link(String link) {
+        return link
+    }
+}
+
+ext.jsDocFactory = {
+    return new JSDocSupport()
+}
